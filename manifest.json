@@ -2,8 +2,8 @@
 	"id": "wled-control",
 	"name": "WLED Control",
 	"version": "0.1.0",
-	"minAppVersion": "1.4.0",
-	"description": "Control WLED LED controllers on your local network directly from Obsidian: color, brightness, presets, and on/off, with automatic device discovery.",
+	"minAppVersion": "1.7.2",
+	"description": "Control WLED LED controllers on your local network: color, brightness, presets, and on/off, with automatic device discovery.",
 	"author": "modularidea",
 	"authorUrl": "https://github.com/modularidea",
 	"isDesktopOnly": true

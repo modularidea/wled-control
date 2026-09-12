@@ -53,11 +53,11 @@ export class WledClient {
 	) {}
 
 	on<K extends WledClientEvent>(event: K, cb: Listener<WledClientEventPayloads[K]>): void {
-		this.listeners[event].add(cb as Listener<unknown>);
+		this.listeners[event].add(cb);
 	}
 
 	off<K extends WledClientEvent>(event: K, cb: Listener<WledClientEventPayloads[K]>): void {
-		this.listeners[event].delete(cb as Listener<unknown>);
+		this.listeners[event].delete(cb);
 	}
 
 	private emit<K extends WledClientEvent>(event: K, payload: WledClientEventPayloads[K]): void {
@@ -143,7 +143,7 @@ export class WledClient {
 
 		ws.onmessage = (ev: MessageEvent) => {
 			try {
-				const data = JSON.parse(ev.data as string);
+				const data: unknown = JSON.parse(ev.data as string);
 				if (data && typeof data === "object" && "state" in data) {
 					this.emit("state", data as WledStatePush);
 				}

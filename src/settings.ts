@@ -21,8 +21,6 @@ export class WledSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "WLED Control" });
-
 		new Setting(containerEl)
 			.setName("Auto-discovery")
 			.setDesc(
@@ -48,14 +46,13 @@ export class WledSettingTab extends PluginSettingTab {
 				slider
 					.setLimits(50, 500, 25)
 					.setValue(this.plugin.settings.colorWriteDebounceMs)
-					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.colorWriteDebounceMs = value;
 						await this.plugin.saveSettings();
 					})
 			);
 
-		containerEl.createEl("h3", { text: "Devices" });
+		new Setting(containerEl).setName("Devices").setHeading();
 		this.managementPanel = renderDeviceManagementPanel(containerEl.createDiv(), this.plugin);
 	}
 

@@ -34,7 +34,7 @@ export function renderDeviceManagementPanel(
 				renderDeviceGroup(device);
 			}
 
-			container.createEl("h4", { text: "Add device" });
+			new Setting(container).setName("Add device").setHeading();
 			addPanel = createAddDevicePanel(container, {
 				existingHosts: () => plugin.settings.devices.map((d) => d.host),
 				mdnsEnabled: plugin.settings.mdnsDiscoveryEnabled,

@@ -3,15 +3,15 @@ import type { WledInfo } from "../types";
 
 export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	return new Promise((resolve, reject) => {
-		const timer = setTimeout(() => reject(new Error("Timeout")), ms);
+		const timer = window.setTimeout(() => reject(new Error("Timeout")), ms);
 		promise.then(
 			(value) => {
-				clearTimeout(timer);
+				window.clearTimeout(timer);
 				resolve(value);
 			},
-			(err) => {
-				clearTimeout(timer);
-				reject(err);
+			(err: unknown) => {
+				window.clearTimeout(timer);
+				reject(err instanceof Error ? err : new Error(String(err)));
 			}
 		);
 	});

@@ -59,7 +59,8 @@ export default class WledControlPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = (await this.loadData()) as Partial<WledControlSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 	}
 
 	async saveSettings(): Promise<void> {
@@ -119,7 +120,7 @@ export default class WledControlPlugin extends Plugin {
 	async openDashboardTab(host: string, name: string): Promise<void> {
 		const leaf = this.app.workspace.getLeaf(true);
 		await leaf.setViewState({ type: VIEW_TYPE_DASHBOARD, active: true, state: { host, name } });
-		this.app.workspace.revealLeaf(leaf);
+		await this.app.workspace.revealLeaf(leaf);
 	}
 
 	async activateSidebarView(): Promise<void> {
@@ -129,7 +130,7 @@ export default class WledControlPlugin extends Plugin {
 			leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true);
 			await leaf.setViewState({ type: VIEW_TYPE_SIDEBAR, active: true });
 		}
-		workspace.revealLeaf(leaf);
+		await workspace.revealLeaf(leaf);
 	}
 
 	refreshQuickAccess(): void {
