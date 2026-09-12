@@ -1,6 +1,6 @@
 {
 	"name": "wled-control",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Obsidian plugin to control WLED LED controllers on your local network.",
 	"main": "main.js",
 	"scripts": {
