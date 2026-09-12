@@ -1,0 +1,361 @@
+/* Uses Obsidian's own design tokens (--size-4-*, --interactive-accent, --background-*,
+ * --text-*, --radius-*). Plugin-specific tokens only for what Obsidian doesn't provide
+ * (status colors, motion durations). */
+
+:root {
+	--wled-status-online: #3fb950;
+	--wled-status-offline: var(--text-faint);
+	--wled-status-reconnecting: #d29922;
+	--wled-status-error: var(--text-error);
+	--wled-duration-fast: 100ms;
+	--wled-duration-base: 200ms;
+}
+
+/* ---------- Sidebar / Dashboard Layout ---------- */
+
+.wled-sidebar-view {
+	padding: var(--size-4-2);
+}
+
+.wled-empty-state {
+	padding: var(--size-4-2);
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.wled-empty-state button {
+	margin-top: var(--size-4-2);
+}
+
+.wled-manage-view {
+	padding: var(--size-4-3);
+	max-width: 640px;
+}
+
+.wled-settings-device-group {
+	margin-bottom: var(--size-4-3);
+	padding-bottom: var(--size-4-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.wled-dashboard-view {
+	height: 100%;
+	display: flex;
+}
+
+.wled-dashboard-iframe {
+	flex: 1;
+	border: none;
+	width: 100%;
+	height: 100%;
+}
+
+/* ---------- DeviceCard ---------- */
+
+.wled-device-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	margin-bottom: var(--size-4-2);
+	background: var(--background-secondary);
+	overflow: hidden;
+	max-width: 480px;
+	container-type: inline-size;
+	container-name: wled-card;
+}
+
+/* Narrow pane: drop the browser/dashboard-tab buttons before the toggle, name, color, or
+ * brightness slider have to give up any space. */
+@container wled-card (max-width: 280px) {
+	.wled-secondary-action {
+		display: none;
+	}
+}
+
+.wled-device-card.is-offline {
+	opacity: 0.6;
+}
+
+.wled-device-card-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+.wled-device-card-clickarea {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	flex: 1;
+	min-width: 0;
+	cursor: pointer;
+}
+
+.wled-device-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wled-color-preview {
+	width: var(--size-4-4);
+	height: var(--size-4-4);
+	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	flex-shrink: 0;
+	transition: background-color var(--wled-duration-fast) ease-out;
+}
+
+.wled-device-card-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	flex-shrink: 0;
+}
+
+.wled-device-card-quickrow {
+	padding: 0 var(--size-4-3) var(--size-4-2);
+}
+
+.wled-device-card-body {
+	border-top: 1px solid var(--background-modifier-border);
+	padding: var(--size-4-2) var(--size-4-3) var(--size-4-3);
+}
+
+/* ---------- Tabs ---------- */
+
+.wled-tab-bar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+}
+
+.wled-tab-button {
+	flex: 1;
+	min-width: 4.5rem;
+	padding: var(--size-4-1) var(--size-4-2);
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.wled-tab-button.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.wled-tab-content-wrap {
+	position: relative;
+}
+
+.wled-tab-content {
+	animation: wled-fade var(--wled-duration-base) ease-out;
+}
+
+@keyframes wled-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* ---------- StatusDot ---------- */
+
+.wled-status-dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	background: var(--wled-status-offline);
+	transition: background-color var(--wled-duration-base) ease-out;
+}
+
+.wled-status-dot[data-status="online"] {
+	background: var(--wled-status-online);
+}
+
+.wled-status-dot[data-status="reconnecting"],
+.wled-status-dot[data-status="connecting"] {
+	background: var(--wled-status-reconnecting);
+}
+
+.wled-status-dot[data-status="offline"],
+.wled-status-dot[data-status="error"] {
+	background: var(--wled-status-error);
+}
+
+/* ---------- PowerToggle ---------- */
+
+.wled-power-toggle {
+	width: 40px;
+	height: 40px;
+	border-radius: var(--radius-m);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-muted);
+	transition:
+		color var(--wled-duration-fast) ease-out,
+		background-color var(--wled-duration-fast) ease-out;
+}
+
+.wled-power-toggle.is-on {
+	color: var(--wled-current-color, var(--interactive-accent));
+	background: var(--background-modifier-hover);
+}
+
+.wled-power-toggle.is-busy {
+	opacity: 0.5;
+	cursor: wait;
+}
+
+/* ---------- BrightnessSlider ---------- */
+
+.wled-brightness-slider {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.wled-brightness-slider input[type="range"] {
+	flex: 1;
+}
+
+.wled-brightness-label {
+	width: 3em;
+	text-align: right;
+	color: var(--text-muted);
+	font-size: 0.85rem;
+}
+
+/* ---------- ColorWheel ---------- */
+
+.wled-color-wheel {
+	position: relative;
+	width: 180px;
+	height: 180px;
+	margin: 0 auto;
+}
+
+.wled-color-wheel canvas {
+	touch-action: none;
+	cursor: crosshair;
+	border-radius: 50%;
+}
+
+.wled-color-wheel-marker {
+	position: absolute;
+	width: var(--size-4-3);
+	height: var(--size-4-3);
+	margin-left: calc(var(--size-4-3) / -2);
+	margin-top: calc(var(--size-4-3) / -2);
+	border-radius: 50%;
+	border: 2px solid white;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+	pointer-events: none;
+}
+
+/* ---------- SegmentRow ---------- */
+
+.wled-segment-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) 0;
+}
+
+.wled-segment-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ---------- PresetTile ---------- */
+
+.wled-preset-tile {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--size-4-1);
+	min-width: 5rem;
+	max-width: 9rem;
+	padding: var(--size-4-2) var(--size-4-3);
+	margin: 0 var(--size-4-1) var(--size-4-1) 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	cursor: pointer;
+	transition:
+		transform var(--wled-duration-fast) ease-out,
+		border-color var(--wled-duration-fast) ease-out;
+}
+
+.wled-preset-tile:active {
+	transform: scale(0.96);
+}
+
+.wled-preset-tile.is-active {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+
+/* Fixed rem values, not Obsidian font tokens (--font-ui-larger/smaller aren't verified vars).
+ * ql is a free-text quick-load label set on the device itself — can be arbitrary Unicode
+ * (emoji, symbols), so it's kept modest in size and never the only label on the tile. */
+.wled-preset-ql {
+	font-size: 1.1rem;
+	line-height: 1.2;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wled-preset-name {
+	font-size: 0.85rem;
+	line-height: 1.3;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: center;
+}
+
+/* ---------- Ribbon-Icon Farbfeedback (Phase 2) ---------- */
+
+.wled-ribbon-icon.is-on {
+	color: var(--wled-current-color, var(--interactive-accent));
+}
+
+/* ---------- Statusbar-Item (Phase 2) ---------- */
+
+.wled-statusbar-item {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	cursor: pointer;
+}
+
+.wled-statusbar-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--background-modifier-border);
+	transition: background-color var(--wled-duration-base) ease-out;
+}
+
+.wled-statusbar-dot[data-status="offline"],
+.wled-statusbar-dot[data-status="error"] {
+	outline: 1px solid var(--wled-status-error);
+}

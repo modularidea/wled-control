@@ -1,0 +1,12 @@
+node_modules/
+main.js
+*.js.map
+.DS_Store
+data.json
+.vscode/
+
+# internal project docs / scaffolding templates, not part of the public plugin
+docs/
+CLAUDE.md
+CLAUDE.template.md
+ui-spec.template.md
