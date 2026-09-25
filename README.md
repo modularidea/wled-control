@@ -18,6 +18,7 @@ Obsidian — color, brightness, presets, and on/off, with automatic device disco
 - Ribbon icon and status bar entry per device for one-click toggling, with live color feedback
 - Commands (with hotkey support) to toggle a specific device
 - Open a device's own web dashboard in a browser tab, or embedded as an in-app tab
+- Codeblock buttons allowing for custom states and sequences.
 
 ## Installation
 
@@ -32,6 +33,16 @@ Not yet on the Obsidian Community Plugins list. Manual install for now:
 
 1. Open Settings → WLED Control and add a device (manual IP, or click "Start search").
 2. Open the WLED Control sidebar (ribbon icon or the "Open sidebar" command) to control it.
+
+### Codeblock buttons
+
+1. Start a codeblock with \`\`\`wled-effect\`\`\`.
+2. In JSON format write either the device name or the device id ("device-name"/"device-id") of the device you want to address.
+3. Also add "effect-name" to give a name to the button.
+
+- In the `"status"` field define the state you want the device to have after the effect is done. Basically the end state. For more info on the specific state object look at the official API documentation by WLED: https://kno.wled.ge/interfaces/json-api/#state-object
+
+- In the `"sequence"` field multiple effects can be defined in a JSON list that will be played in sequence. For each entry use the `"status"` field to define the state that should be displayed, and the `"delay"` field to declare the time in milliseconds to wait until the next effect in the sequence is displayed.
 
 ## Known limitations
 

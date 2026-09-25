@@ -1,6 +1,6 @@
 import { Plugin, setTooltip } from "obsidian";
 import { DEFAULT_SETTINGS, type WledControlSettings } from "./src/types";
-import { DeviceManager } from "./src/devices/deviceManager";
+import { DeviceEntry, DeviceManager } from "./src/devices/deviceManager";
 import { probeWledInfo } from "./src/devices/httpUtil";
 import { WledSettingTab } from "./src/settings";
 import { SidebarView, VIEW_TYPE_SIDEBAR } from "./src/views/sidebarView";
@@ -47,10 +47,42 @@ export default class WledControlPlugin extends Plugin {
 			name: "Manage devices (open settings)",
 			callback: () => this.openSettings(),
 		});
-
 		this.addSettingTab(new WledSettingTab(this.app, this));
 
 		this.refreshQuickAccess();
+		this.registerMarkdownCodeBlockProcessor(
+			"wled-effect",
+			async(source,el) => {
+				let content;
+				try {
+					content = JSON.parse(source)
+				} catch(e){ // display an error Element when an error in the JSON is detected
+					console.error(`WLED Effect Button: Encountered Invalid JSON whilst trying to pass Button Code Block: ${e} `);
+					const button = el.createEl("button", { cls: "wled-effect-button", "text": `Invalid JSON`});
+					button.addEventListener("mouseover", () => {
+							let er = el.createEl("p", {"text" : `Encountered Invalid JSON whilst trying to pass Button Code Block: ${e}`});
+							setTimeout(() => er.remove(), 3000);
+					})
+					return;
+				};
+				const button = el.createEl("button", { cls: "wled-effect-button", "text": `${content["device-name"]} : ${content["effect-name"]}`});
+				button.addEventListener("click",async () =>{ //sends the command to the device specified in the codeblock
+					let device : DeviceEntry | undefined = this.deviceManager.getEntries().find((entry) => entry.config.id === content["device-id"] || entry.config.name === content["device-name"]);
+					if (device == undefined || !(device.client.getStatus() === "online")){
+						button.setAttr("error", true)
+						setTimeout(() => button.removeAttribute("error"), 3000);
+						return;
+					}
+					button.setAttr("working",true)
+					for(const effect of content["sequence"]){ // goes through the effects in the sequence, awaiting their delay and finally ending in the status. 
+						device.client.setState(effect["status"])
+						function ms(delay : number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, delay))}
+						await ms(Number(effect["delay"]))
+					}
+					device.client.setState(content["status"]).finally(() => button.removeAttribute("working"));
+				})
+			}
+		)
 	}
 
 	onunload(): void {

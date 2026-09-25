@@ -359,3 +359,34 @@
 .wled-statusbar-dot[data-status="error"] {
 	outline: 1px solid var(--wled-status-error);
 }
+
+/* ---------- Document-Effect-Button ---------- */
+
+.wled-effect-button {
+	height: var(--input-height);
+	padding: 0 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--button-radius);
+	background-color: var(--interactive-normal);
+	color: var(--text-normal);
+	font-family: var(--font-interface-theme);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+	cursor: pointer;
+	transition: var(--anim-duration-moderate) var(--anim-motion-baseline);
+}
+
+.wled-effect-button:hover {
+	background-color: var(--interactive-hover);
+	border-color: var(--background-modifier-border-hover);
+}
+
+.wled-effect-button[working] {
+	background-color: var(--color-blue);
+	color: var(--color-base-00);
+}
+
+.wled-effect-button[error] {
+	background-color: var(--color-red);
+	color: var(--color-base-00);
+}
