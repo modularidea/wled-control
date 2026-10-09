@@ -1,6 +1,18 @@
-import * as os from "os";
+import * as nodeOs from "os";
 import { probeWledInfo } from "./httpUtil";
 import type { DiscoveredWledDevice } from "./discovery";
+
+// Explicit shape for the parts of Node's `os` module used here, so type-aware linting
+// does not depend on how `os` resolves in the environment.
+interface NetworkInterface {
+	family: string | number;
+	internal: boolean;
+	address: string;
+}
+interface OsModule {
+	networkInterfaces(): Record<string, NetworkInterface[] | undefined>;
+}
+const os = nodeOs as unknown as OsModule;
 
 const CONCURRENCY = 24;
 const PROBE_TIMEOUT_MS = 400;
@@ -51,7 +63,7 @@ function localIPv4Bases(): string[] {
 	const bases = new Set<string>();
 	for (const list of Object.values(ifaces)) {
 		for (const iface of list ?? []) {
-			if (iface.family === "IPv4" && !iface.internal && isRfc1918(iface.address)) {
+			if ((iface.family === "IPv4" || iface.family === 4) && !iface.internal && isRfc1918(iface.address)) {
 				const parts = iface.address.split(".");
 				bases.add(parts.slice(0, 3).join("."));
 			}
