@@ -360,7 +360,7 @@
 	outline: 1px solid var(--wled-status-error);
 }
 
-/* ---------- Document-Effect-Button ---------- */
+/* ---------- WLED effect button ---------- */
 
 .wled-effect-button {
 	height: var(--input-height);
@@ -389,4 +389,8 @@
 .wled-effect-button[error] {
 	background-color: var(--color-red);
 	color: var(--color-base-00);
+}
+
+.wled-effect-error {
+	color: var(--text-error);
 }

@@ -36,13 +36,13 @@ Not yet on the Obsidian Community Plugins list. Manual install for now:
 
 ### Codeblock buttons
 
-1. Start a codeblock with \`\`\`wled-effect\`\`\`.
+1. Start a fenced code block with the language `wled-effect`.
 2. In JSON format write either the device name or the device id ("device-name"/"device-id") of the device you want to address.
 3. Also add "effect-name" to give a name to the button.
 
-- In the `"status"` field define the state you want the device to have after the effect is done. Basically the end state. For more info on the specific state object look at the official API documentation by WLED: https://kno.wled.ge/interfaces/json-api/#state-object
+- Optionally, in the `"status"` field define the state you want the device to have after the effect is done. Basically the end state. For more info on the specific state object look at the official API documentation by WLED: https://kno.wled.ge/interfaces/json-api/#state-object
 
-- In the `"sequence"` field multiple effects can be defined in a JSON list that will be played in sequence. For each entry use the `"status"` field to define the state that should be displayed, and the `"delay"` field to declare the time in milliseconds to wait until the next effect in the sequence is displayed.
+- Optionally, in the `"sequence"` field multiple effects can be defined in a JSON list that will be played in sequence. For each entry use the `"status"` field to define the state that should be displayed, and the `"delay"` field to declare the time in milliseconds to wait until the next effect in the sequence is displayed.
 
 ## Known limitations
 
