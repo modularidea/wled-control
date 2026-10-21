@@ -126,8 +126,8 @@ export class SerialWledClient implements DeviceClient {
 	private async createTransport(): Promise<SerialTransport> {
 		if (this.options.transportFactory) return this.options.transportFactory();
 		try {
-			const { FsSerialTransport } = await import("./serial");
-			return new FsSerialTransport(this.options.path, this.options.baudRate);
+			const { ProcessSerialTransport } = await import("./serial");
+			return new ProcessSerialTransport(this.options.path, this.options.baudRate);
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);
 			throw new Error(`Serial support is unavailable: ${reason}`);

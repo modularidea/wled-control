@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
 
 // Loaded lazily (dynamic import) so a failure here never affects network devices.
@@ -11,6 +11,14 @@ export interface SerialTransport {
 	onClose(cb: (error?: Error) => void): void;
 }
 
+// The reader exits when the port closes or the device is unplugged; the watcher stops it once
+// our stdin closes, so a crashed Obsidian can't leave a process holding the port. sh gives
+// background jobs /dev/null as stdin, hence the explicit fd 3 for the watcher.
+const READER_SCRIPT =
+	'exec 3<&0; cat "$1" </dev/null & p=$!; (cat <&3 >/dev/null; kill $p 2>/dev/null) & wait $p';
+const WRITER_SCRIPT = 'exec cat > "$1"';
+const KILL_AFTER_MS = 2000;
+
 function runStty(args: string[]): Promise<void> {
 	return new Promise((resolve, reject) => {
 		execFile("stty", args, (err, _stdout, stderr) => {
@@ -20,27 +28,24 @@ function runStty(args: string[]): Promise<void> {
 	});
 }
 
-function describeError(err: NodeJS.ErrnoException): Error {
-	switch (err.code) {
-		case "ENOENT":
-			return new Error("Port not found — is the controller plugged in?");
-		case "EACCES":
-		case "EPERM":
-			return new Error("No permission to open the port.");
-		case "EBUSY":
-			return new Error("Port is busy — another program may be using it.");
-		default:
-			return err;
-	}
+function spawned(child: ChildProcess): Promise<void> {
+	return new Promise((resolve, reject) => {
+		child.once("spawn", () => resolve());
+		child.once("error", reject);
+	});
 }
 
-// Serial access via plain file I/O plus stty — no native module, so Obsidian updates can't break it.
-export class FsSerialTransport implements SerialTransport {
-	private readStream: fs.ReadStream | null = null;
-	private writeFd: number | null = null;
+// Serial access through stty plus two small cat helper processes — no native module, so Obsidian
+// updates can't break it. All blocking tty I/O (and a close() that may wait for an unresponsive
+// device to drain) happens in the helpers, never in Obsidian's own threads: fs streams would pin
+// libuv threadpool threads in uncancellable reads, and libuv's tty handles leak descriptors on macOS.
+export class ProcessSerialTransport implements SerialTransport {
+	private reader: ChildProcess | null = null;
+	private writer: ChildProcess | null = null;
 	private dataCb: (chunk: string) => void = () => undefined;
 	private closeCb: (error?: Error) => void = () => undefined;
 	private ended = false;
+	private stderr = "";
 
 	constructor(
 		private path: string,
@@ -70,33 +75,33 @@ export class FsSerialTransport implements SerialTransport {
 				: new Error(`Could not configure the port: ${message}`);
 		}
 
-		const stream = fs.createReadStream(this.path, { encoding: "utf8" });
-		await new Promise<void>((resolve, reject) => {
-			stream.once("open", () => resolve());
-			stream.once("error", (err) => reject(describeError(err)));
-		});
-		this.readStream = stream;
-		stream.on("data", (chunk) => this.dataCb(chunk as string));
-		stream.on("error", (err) => this.finish(describeError(err)));
-		stream.on("close", () => this.finish());
+		const reader = spawn("sh", ["-c", READER_SCRIPT, "sh", this.path], { stdio: ["pipe", "pipe", "pipe"] });
+		const writer = spawn("sh", ["-c", WRITER_SCRIPT, "sh", this.path], { stdio: ["pipe", "ignore", "pipe"] });
+		this.reader = reader;
+		this.writer = writer;
+
+		for (const child of [reader, writer]) {
+			child.stderr?.setEncoding("utf8");
+			child.stderr?.on("data", (text: string) => (this.stderr += text));
+			child.stdin?.on("error", () => undefined);
+			child.on("exit", () => this.finish());
+		}
+		reader.stdout?.setEncoding("utf8");
+		reader.stdout?.on("data", (chunk: string) => this.dataCb(chunk));
 
 		try {
-			this.writeFd = await new Promise<number>((resolve, reject) => {
-				fs.open(this.path, fs.constants.O_WRONLY | fs.constants.O_NOCTTY, (err, fd) =>
-					err ? reject(describeError(err)) : resolve(fd)
-				);
-			});
+			await Promise.all([spawned(reader), spawned(writer)]);
 		} catch (err) {
-			stream.destroy();
-			throw err;
+			this.release();
+			throw new Error(`Could not start the serial helper: ${err instanceof Error ? err.message : String(err)}`);
 		}
 	}
 
 	write(data: string): Promise<void> {
-		const fd = this.writeFd;
-		if (fd === null || this.ended) return Promise.reject(new Error("Port is closed."));
+		const stdin = this.writer?.stdin;
+		if (!stdin || this.ended) return Promise.reject(new Error("Port is closed."));
 		return new Promise((resolve, reject) => {
-			fs.write(fd, data, (err) => (err ? reject(describeError(err)) : resolve()));
+			stdin.write(data, (err) => (err ? reject(new Error("Port is closed.")) : resolve()));
 		});
 	}
 
@@ -105,21 +110,32 @@ export class FsSerialTransport implements SerialTransport {
 		this.release();
 	}
 
-	private finish(error?: Error): void {
+	private finish(): void {
 		if (this.ended) return;
 		this.ended = true;
 		this.release();
-		this.closeCb(error);
+		this.closeCb(new Error(this.describeFailure()));
 	}
 
+	private describeFailure(): string {
+		const text = this.stderr.trim();
+		if (/No such file/i.test(text)) return "Port not found — is the controller plugged in?";
+		if (/Permission denied/i.test(text)) return "No permission to open the port.";
+		if (/busy/i.test(text)) return "Port is busy — another program may be using it.";
+		return text || "Connection to the controller was lost.";
+	}
+
+	// Closing stdin lets both helpers wind down on their own; SIGKILL is only the fallback for a
+	// helper stuck closing a port whose device stopped draining.
 	private release(): void {
-		this.readStream?.destroy();
-		this.readStream = null;
-		if (this.writeFd !== null) {
-			const fd = this.writeFd;
-			this.writeFd = null;
-			fs.close(fd, () => undefined);
+		for (const child of [this.reader, this.writer]) {
+			if (!child) continue;
+			child.stdin?.end();
+			const timer = window.setTimeout(() => child.kill("SIGKILL"), KILL_AFTER_MS);
+			child.once("exit", () => window.clearTimeout(timer));
 		}
+		this.reader = null;
+		this.writer = null;
 	}
 }
 
