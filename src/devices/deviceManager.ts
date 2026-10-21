@@ -1,6 +1,19 @@
 import type { DeviceClient, DeviceStatePush } from "./deviceClient";
+import { SerialWledClient } from "./serialClient";
 import { WledClient } from "./wledClient";
+import { DEFAULT_SERIAL_BAUD_RATE } from "../types";
 import type { WledDeviceConfig, WledDeviceRuntimeState, WledPreset } from "../types";
+
+// Everything that requires a fresh connection when it changes.
+function connectionKey(config: WledDeviceConfig): string {
+	return JSON.stringify([
+		config.connectionType,
+		config.host,
+		config.serialPath,
+		config.serialBaudRate,
+		config.serialPresets,
+	]);
+}
 
 export interface DeviceEntry {
 	config: WledDeviceConfig;
@@ -16,7 +29,10 @@ export class DeviceManager {
 	private entries = new Map<string, DeviceEntry>();
 	private listeners = new Set<ChangeListener>();
 
-	constructor(private colorWriteDebounceMs: () => number) {}
+	constructor(
+		private colorWriteDebounceMs: () => number,
+		private serialEnabled: () => boolean
+	) {}
 
 	onChange(cb: ChangeListener): () => void {
 		this.listeners.add(cb);
@@ -35,7 +51,13 @@ export class DeviceManager {
 		return this.entries.get(id);
 	}
 
-	syncDevices(configs: WledDeviceConfig[]): void {
+	// USB devices are only connected while the experimental serial option is on.
+	isActive(config: WledDeviceConfig): boolean {
+		return config.connectionType !== "usb" || this.serialEnabled();
+	}
+
+	syncDevices(allConfigs: WledDeviceConfig[]): void {
+		const configs = allConfigs.filter((c) => this.isActive(c));
 		const configIds = new Set(configs.map((c) => c.id));
 
 		for (const id of [...this.entries.keys()]) {
@@ -46,8 +68,8 @@ export class DeviceManager {
 			const existing = this.entries.get(config.id);
 			if (!existing) {
 				this.addDevice(config);
-			} else if (existing.config.host !== config.host) {
-				// Host changed: reconnect fully instead of mutating the client's target.
+			} else if (connectionKey(existing.config) !== connectionKey(config)) {
+				// Connection target changed: reconnect fully instead of mutating the client.
 				this.removeDevice(config.id);
 				this.addDevice(config);
 			} else {
@@ -56,9 +78,22 @@ export class DeviceManager {
 		}
 	}
 
+	private createClient(config: WledDeviceConfig): DeviceClient {
+		if (config.connectionType === "usb") {
+			return new SerialWledClient({
+				path: config.serialPath ?? "",
+				baudRate: config.serialBaudRate ?? DEFAULT_SERIAL_BAUD_RATE,
+				presets: config.serialPresets ?? [],
+				host: config.host,
+				colorWriteDebounceMs: this.colorWriteDebounceMs(),
+			});
+		}
+		return new WledClient(config.host, this.colorWriteDebounceMs());
+	}
+
 	addDevice(config: WledDeviceConfig): void {
 		if (this.entries.has(config.id)) return;
-		const client = new WledClient(config.host, this.colorWriteDebounceMs());
+		const client = this.createClient(config);
 		const runtime: WledDeviceRuntimeState = { status: "connecting", presets: [] };
 		const entry: DeviceEntry = { config, client, runtime };
 		this.entries.set(config.id, entry);

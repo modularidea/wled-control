@@ -33,6 +33,8 @@ export class DeviceCard {
 	private powerToggle!: PowerToggleHandle;
 	private colorPreview!: HTMLElement;
 	private nameEl!: HTMLElement;
+	private connBadgeEl!: HTMLElement;
+	private webActionEls: HTMLElement[] = [];
 	private colorWheel!: ColorWheelHandle;
 	private brightnessSlider!: BrightnessSliderHandle;
 	private segmentRows = new Map<number, SegmentRowHandle>();
@@ -79,6 +81,8 @@ export class DeviceCard {
 			cls: "wled-device-name",
 			text: this.getEntry()?.config.name ?? "",
 		});
+		this.connBadgeEl = clickArea.createSpan({ cls: "wled-conn-badge", text: "USB" });
+		this.connBadgeEl.hidden = true;
 		clickArea.addEventListener("click", () => this.toggleExpanded());
 
 		const actions = this.headerEl.createDiv({ cls: "wled-device-card-actions" });
@@ -101,6 +105,9 @@ export class DeviceCard {
 			const entry = this.getEntry();
 			if (entry) this.callbacks.onOpenDashboardTab(entry.config.host, entry.config.name);
 		});
+
+		// The web UI is only reachable over the network.
+		this.webActionEls = [externalBtn, dashboardBtn];
 
 		this.powerToggle = createPowerToggle(actions, () => {
 			const entry = this.getEntry();
@@ -197,7 +204,10 @@ export class DeviceCard {
 			container.empty();
 			if (entry.runtime.presets.length === 0) {
 				container.createEl("p", {
-					text: "No presets saved on this device.",
+					text:
+						entry.config.connectionType === "usb"
+							? "No presets listed. Add them in the plugin settings (device → edit)."
+							: "No presets saved on this device.",
 					cls: "setting-item-description",
 				});
 				return;
@@ -221,6 +231,9 @@ export class DeviceCard {
 		if (!entry) return;
 
 		this.nameEl.setText(entry.config.name);
+		const isUsb = entry.config.connectionType === "usb";
+		this.connBadgeEl.hidden = !isUsb;
+		for (const el of this.webActionEls) el.hidden = isUsb;
 		this.statusDot.update(entry.runtime.status, entry.runtime.lastError);
 		this.el.toggleClass("is-offline", entry.runtime.status === "offline" || entry.runtime.status === "error");
 

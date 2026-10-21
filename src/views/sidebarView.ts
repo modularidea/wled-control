@@ -54,7 +54,8 @@ export class SidebarView extends ItemView {
 		this.cards.clear();
 		this.listEl.empty();
 
-		if (this.plugin.settings.devices.length === 0) {
+		const devices = this.plugin.settings.devices.filter((d) => this.plugin.deviceManager.isActive(d));
+		if (devices.length === 0) {
 			const empty = this.listEl.createDiv({ cls: "wled-empty-state" });
 			empty.createEl("p", { text: "No WLED devices configured yet." });
 			empty
@@ -63,7 +64,7 @@ export class SidebarView extends ItemView {
 			return;
 		}
 
-		for (const device of this.plugin.settings.devices) {
+		for (const device of devices) {
 			this.addCard(device.id);
 		}
 	}

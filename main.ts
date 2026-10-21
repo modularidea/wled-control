@@ -1,7 +1,13 @@
 import { Plugin, setTooltip } from "obsidian";
-import { DEFAULT_SETTINGS, type WledControlSettings } from "./src/types";
+import {
+	DEFAULT_SERIAL_BAUD_RATE,
+	DEFAULT_SETTINGS,
+	type WledControlSettings,
+	type WledDeviceConfig,
+} from "./src/types";
 import { DeviceManager } from "./src/devices/deviceManager";
 import { probeWledInfo } from "./src/devices/httpUtil";
+import { probeSerialInfo } from "./src/devices/serialClient";
 import { WledSettingTab } from "./src/settings";
 import { SidebarView, VIEW_TYPE_SIDEBAR } from "./src/views/sidebarView";
 import { WebDashboardView, VIEW_TYPE_DASHBOARD } from "./src/views/webDashboardView";
@@ -28,7 +34,10 @@ export default class WledControlPlugin extends Plugin {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
-		this.deviceManager = new DeviceManager(() => this.settings.colorWriteDebounceMs);
+		this.deviceManager = new DeviceManager(
+			() => this.settings.colorWriteDebounceMs,
+			() => this.settings.serialEnabled
+		);
 		this.deviceManager.syncDevices(this.settings.devices);
 		this.deviceManagerUnsub = this.deviceManager.onChange((id) => this.onDeviceRuntimeChange(id));
 
@@ -87,6 +96,51 @@ export default class WledControlPlugin extends Plugin {
 		this.refreshQuickAccess();
 	}
 
+	// Lazy import: serial support must never be able to break plugin startup.
+	async listSerialPorts(): Promise<string[]> {
+		try {
+			const { listSerialPorts } = await import("./src/devices/serial");
+			return await listSerialPorts();
+		} catch {
+			return [];
+		}
+	}
+
+	// Empty name: read it from the controller over the port, fallback to the port's file name.
+	async addUsbDevice(name: string, serialPath: string): Promise<void> {
+		const resolvedName =
+			name.trim() ||
+			(await probeSerialInfo(serialPath, DEFAULT_SERIAL_BAUD_RATE))?.name ||
+			serialPath.split("/").pop() ||
+			serialPath;
+		this.settings.devices.push({
+			id: crypto.randomUUID(),
+			name: resolvedName,
+			connectionType: "usb",
+			host: "",
+			serialPath,
+			serialBaudRate: DEFAULT_SERIAL_BAUD_RATE,
+			serialPresets: [],
+			showInRibbon: false,
+			showInStatusBar: false,
+		});
+		await this.saveSettings();
+		this.syncDevices();
+		this.refreshQuickAccess();
+	}
+
+	async updateUsbDevice(
+		id: string,
+		changes: Pick<WledDeviceConfig, "name" | "host" | "serialPath" | "serialPresets">
+	): Promise<void> {
+		const device = this.settings.devices.find((d) => d.id === id);
+		if (!device) return;
+		Object.assign(device, changes);
+		await this.saveSettings();
+		this.syncDevices();
+		this.refreshQuickAccess();
+	}
+
 	async removeDevice(id: string): Promise<void> {
 		this.settings.devices = this.settings.devices.filter((d) => d.id !== id);
 		await this.saveSettings();
@@ -133,6 +187,10 @@ export default class WledControlPlugin extends Plugin {
 		await workspace.revealLeaf(leaf);
 	}
 
+	private activeDevices(): WledDeviceConfig[] {
+		return this.settings.devices.filter((d) => this.deviceManager.isActive(d));
+	}
+
 	refreshQuickAccess(): void {
 		this.rebuildRibbonIcons();
 		this.rebuildStatusBarItems();
@@ -143,7 +201,7 @@ export default class WledControlPlugin extends Plugin {
 		for (const entry of this.ribbonIcons.values()) entry.el.remove();
 		this.ribbonIcons.clear();
 
-		for (const device of this.settings.devices) {
+		for (const device of this.activeDevices()) {
 			if (!device.showInRibbon) continue;
 			const el = this.addRibbonIcon("power", device.name, () => {
 				void this.deviceManager.toggleDevice(device.id);
@@ -170,7 +228,7 @@ export default class WledControlPlugin extends Plugin {
 		for (const entry of this.statusBarItems.values()) entry.container.remove();
 		this.statusBarItems.clear();
 
-		for (const device of this.settings.devices) {
+		for (const device of this.activeDevices()) {
 			if (!device.showInStatusBar) continue;
 			const container = this.addStatusBarItem();
 			container.addClass("wled-statusbar-item");
@@ -200,7 +258,7 @@ export default class WledControlPlugin extends Plugin {
 
 	// No API to unregister a single command — removed devices leave a dead command until reload.
 	private registerDeviceCommands(): void {
-		for (const device of this.settings.devices) {
+		for (const device of this.activeDevices()) {
 			const cmdId = `toggle-${device.id}`;
 			if (this.registeredCommandIds.has(cmdId)) continue;
 			this.registeredCommandIds.add(cmdId);

@@ -37,6 +37,23 @@ export class WledSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("USB serial devices (experimental)")
+			.setDesc(
+				"Control controllers over a USB cable, for example ones without WiFi. macOS and Linux " +
+					"only. Uses the system's stty and the controller's serial port; no drivers or " +
+					"native modules involved."
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.serialEnabled).onChange(async (value) => {
+					this.plugin.settings.serialEnabled = value;
+					await this.plugin.saveSettings();
+					this.plugin.syncDevices();
+					this.plugin.refreshQuickAccess();
+					this.display();
+				})
+			);
+
+		new Setting(containerEl)
 			.setName("Color write delay")
 			.setDesc(
 				"Delay in ms before a color change (e.g. dragging the color wheel) is sent to the " +
