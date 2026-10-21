@@ -1,5 +1,6 @@
 import { requestUrl } from "obsidian";
 import { withTimeout } from "./httpUtil";
+import { parsePresetsJson } from "./presets";
 import type {
 	DeviceClient,
 	DeviceClientEvent,
@@ -104,10 +105,7 @@ export class WledClient implements DeviceClient {
 				requestUrl({ url: this.url("/presets.json"), method: "GET" }),
 				HTTP_TIMEOUT_MS
 			);
-			const raw = res.json as Record<string, { n?: string; ql?: string }>;
-			const presets: WledPreset[] = Object.entries(raw)
-				.filter(([id]) => id !== "0")
-				.map(([id, val]) => ({ id: Number(id), name: val.n, ql: val.ql }));
+			const presets = parsePresetsJson(res.json);
 			this.emit("presets", presets);
 			return presets;
 		} catch {

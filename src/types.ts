@@ -64,14 +64,21 @@ export interface WledPreset {
 
 export type ConnectionStatus = "connecting" | "online" | "reconnecting" | "offline" | "error";
 
-// "usb" (Phase 3) intentionally not included yet.
-export type DeviceConnectionType = "network";
+export type DeviceConnectionType = "network" | "usb";
+
+export const DEFAULT_SERIAL_BAUD_RATE = 115200;
 
 export interface WledDeviceConfig {
 	id: string;
 	name: string;
 	connectionType: DeviceConnectionType;
-	host: string; // IP or mDNS hostname, no protocol/port
+	// IP or mDNS hostname, no protocol/port. Empty for USB devices unless set to fetch preset
+	// names over HTTP; USB devices are always controlled over serial.
+	host: string;
+	serialPath?: string;
+	serialBaudRate?: number;
+	// Preset list for USB devices (WLED exposes preset names only over HTTP).
+	serialPresets?: WledPreset[];
 	showInRibbon: boolean;
 	showInStatusBar: boolean;
 }
@@ -87,11 +94,13 @@ export interface WledDeviceRuntimeState {
 export interface WledControlSettings {
 	devices: WledDeviceConfig[];
 	mdnsDiscoveryEnabled: boolean;
+	serialEnabled: boolean;
 	colorWriteDebounceMs: number;
 }
 
 export const DEFAULT_SETTINGS: WledControlSettings = {
 	devices: [],
 	mdnsDiscoveryEnabled: true,
+	serialEnabled: false,
 	colorWriteDebounceMs: 150,
 };
