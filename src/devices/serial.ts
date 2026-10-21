@@ -1,4 +1,4 @@
-import { execFile, spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
 
 // Loaded lazily (dynamic import) so a failure here never affects network devices.
@@ -14,19 +14,16 @@ export interface SerialTransport {
 // The reader exits when the port closes or the device is unplugged; the watcher stops it once
 // our stdin closes, so a crashed Obsidian can't leave a process holding the port. sh gives
 // background jobs /dev/null as stdin, hence the explicit fd 3 for the watcher.
+// stty runs while cat holds the port open: macOS resets termios (raw mode, -hupcl) when the last
+// process closes the port, so configuring it beforehand would have no effect.
 const READER_SCRIPT =
-	'exec 3<&0; cat "$1" </dev/null & p=$!; (cat <&3 >/dev/null; kill $p 2>/dev/null) & wait $p';
+	'exec 3<&0; cat "$1" </dev/null & p=$!; sleep 0.3; ' +
+	'stty "$2" "$1" "$3" raw -echo -hupcl || { kill $p 2>/dev/null; exit 1; }; echo READY >&2; ' +
+	"(cat <&3 >/dev/null; kill $p 2>/dev/null) & wait $p";
 const WRITER_SCRIPT = 'exec cat > "$1"';
+const READY_MARKER = "READY";
+const READY_TIMEOUT_MS = 4000;
 const KILL_AFTER_MS = 2000;
-
-function runStty(args: string[]): Promise<void> {
-	return new Promise((resolve, reject) => {
-		execFile("stty", args, (err, _stdout, stderr) => {
-			if (err) reject(new Error(stderr.trim() || err.message));
-			else resolve();
-		});
-	});
-}
 
 function spawned(child: ChildProcess): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -64,25 +61,37 @@ export class ProcessSerialTransport implements SerialTransport {
 		if (process.platform !== "darwin" && process.platform !== "linux") {
 			throw new Error("USB serial is supported on macOS and Linux only.");
 		}
-		// -hupcl: don't drop DTR when the port closes (would reset some boards).
+		// -hupcl (set by the reader script): don't drop DTR when the port closes, which would
+		// reset some boards.
 		const deviceFlag = process.platform === "darwin" ? "-f" : "-F";
-		try {
-			await runStty([deviceFlag, this.path, String(this.baudRate), "raw", "-echo", "-hupcl"]);
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			throw /No such file|ENOENT/i.test(message)
-				? new Error("Port not found — is the controller plugged in?")
-				: new Error(`Could not configure the port: ${message}`);
-		}
-
-		const reader = spawn("sh", ["-c", READER_SCRIPT, "sh", this.path], { stdio: ["pipe", "pipe", "pipe"] });
+		const readerArgs = ["-c", READER_SCRIPT, "sh", this.path, deviceFlag, String(this.baudRate)];
+		const reader = spawn("sh", readerArgs, { stdio: ["pipe", "pipe", "pipe"] });
 		const writer = spawn("sh", ["-c", WRITER_SCRIPT, "sh", this.path], { stdio: ["pipe", "ignore", "pipe"] });
 		this.reader = reader;
 		this.writer = writer;
 
+		let markReady: () => void = () => undefined;
+		const ready = new Promise<void>((resolve, reject) => {
+			const timer = window.setTimeout(() => reject(new Error("Timed out configuring the port.")), READY_TIMEOUT_MS);
+			markReady = () => {
+				window.clearTimeout(timer);
+				resolve();
+			};
+			reader.once("exit", () => {
+				window.clearTimeout(timer);
+				reject(new Error(this.describeFailure()));
+			});
+		});
+
 		for (const child of [reader, writer]) {
 			child.stderr?.setEncoding("utf8");
-			child.stderr?.on("data", (text: string) => (this.stderr += text));
+			child.stderr?.on("data", (text: string) => {
+				this.stderr += text;
+				if (child === reader && this.stderr.includes(READY_MARKER)) {
+					this.stderr = this.stderr.replace(READY_MARKER, "");
+					markReady();
+				}
+			});
 			child.stdin?.on("error", () => undefined);
 			child.on("exit", () => this.finish());
 		}
@@ -90,10 +99,10 @@ export class ProcessSerialTransport implements SerialTransport {
 		reader.stdout?.on("data", (chunk: string) => this.dataCb(chunk));
 
 		try {
-			await Promise.all([spawned(reader), spawned(writer)]);
+			await Promise.all([spawned(reader), spawned(writer), ready]);
 		} catch (err) {
 			this.release();
-			throw new Error(`Could not start the serial helper: ${err instanceof Error ? err.message : String(err)}`);
+			throw err instanceof Error ? err : new Error(String(err));
 		}
 	}
 

@@ -11,7 +11,10 @@ import { mergePresets, parsePresetsJson } from "./presets";
 import type { SerialTransport } from "./serial";
 import type { ConnectionStatus, WledInfo, WledPreset, WledState } from "../types";
 
-const FIRST_RESPONSE_TIMEOUT_MS = 3000;
+// A controller may still be booting (or resetting) when the port opens. Stay on the same open
+// port and keep asking instead of reopening, which could reset it again.
+const FIRST_RESPONSE_TIMEOUT_MS = 30000;
+const FIRST_REQUEST_RETRY_MS = 1000;
 const POLL_INTERVAL_MS = 5000;
 const HTTP_PRESETS_TIMEOUT_MS = 2500;
 const RECONNECT_DELAY_MS = 1500;
@@ -87,13 +90,18 @@ export class SerialWledClient implements DeviceClient {
 			this.transport = transport;
 
 			const firstState = this.waitForFirstState();
+			const retry = window.setInterval(() => {
+				void this.send({}).catch(() => undefined);
+			}, FIRST_REQUEST_RETRY_MS);
 			try {
 				await this.send({});
+				await firstState.promise;
 			} catch (err) {
 				firstState.cancel();
 				throw err;
+			} finally {
+				window.clearInterval(retry);
 			}
-			await firstState.promise;
 			if (this.closedByUser) return;
 
 			this.reconnectDelay = RECONNECT_DELAY_MS;
@@ -263,7 +271,7 @@ export class SerialWledClient implements DeviceClient {
 }
 
 // Opens the port once to read the controller's own name (used as default device name).
-export function probeSerialInfo(path: string, baudRate: number, timeoutMs = 4000): Promise<WledInfo | null> {
+export function probeSerialInfo(path: string, baudRate: number, timeoutMs = 8000): Promise<WledInfo | null> {
 	return new Promise((resolve) => {
 		const client = new SerialWledClient({ path, baudRate, presets: [], colorWriteDebounceMs: 0 });
 		const finish = (info: WledInfo | null): void => {
