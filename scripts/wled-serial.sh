@@ -49,14 +49,17 @@ case $COMMAND in
 esac
 
 if [ -z "$PORT" ]; then
-	# Unquoted on purpose: let the shell expand the globs.
-	set -- /dev/cu.usbmodem* /dev/cu.usbserial* /dev/cu.wchusbserial* /dev/ttyACM* /dev/ttyUSB*
+	# Match with case instead of globbing each pattern: zsh (the Shortcuts app's shell) aborts on a
+	# glob without matches, sh and bash don't.
 	FOUND=
 	COUNT=0
-	for candidate in "$@"; do
-		[ -e "$candidate" ] || continue
-		FOUND="$FOUND $candidate"
-		COUNT=$((COUNT + 1))
+	for candidate in /dev/*; do
+		case $candidate in
+			/dev/cu.usbmodem* | /dev/cu.usbserial* | /dev/cu.wchusbserial* | /dev/ttyACM* | /dev/ttyUSB*)
+				FOUND="$FOUND $candidate"
+				COUNT=$((COUNT + 1))
+				;;
+		esac
 	done
 	case $COUNT in
 		0) echo "no USB serial port found - is the controller plugged in?" >&2; exit 1 ;;
