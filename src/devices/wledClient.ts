@@ -1,5 +1,6 @@
 import { requestUrl } from "obsidian";
 import { withTimeout } from "./httpUtil";
+import { PendingColors, type Rgb } from "./pendingColors";
 import { parsePresetsJson } from "./presets";
 import type {
 	DeviceClient,
@@ -23,7 +24,7 @@ export class WledClient implements DeviceClient {
 	private reconnectTimer: number | null = null;
 	private reconnectDelay = RECONNECT_DELAY_MS;
 	private colorWriteTimer: number | null = null;
-	private pendingColorBody: Record<string, unknown> | null = null;
+	private pendingColors = new PendingColors();
 	private closedByUser = false;
 	private status: ConnectionStatus = "connecting";
 
@@ -185,14 +186,12 @@ export class WledClient implements DeviceClient {
 	}
 
 	// Debounced to avoid flooding the ESP8266/ESP32 during color-wheel drags.
-	setSegmentColorDebounced(segId: number, rgb: [number, number, number]): void {
-		const seg = { id: segId, col: [rgb] };
-		this.pendingColorBody = { seg: [seg] };
+	setSegmentColorDebounced(segId: number, rgb: Rgb): void {
+		this.pendingColors.set(segId, rgb);
 		if (this.colorWriteTimer !== null) window.clearTimeout(this.colorWriteTimer);
 		this.colorWriteTimer = window.setTimeout(() => {
 			this.colorWriteTimer = null;
-			const body = this.pendingColorBody;
-			this.pendingColorBody = null;
+			const body = this.pendingColors.take();
 			if (body) void this.setState(body);
 		}, this.colorWriteDebounceMs);
 	}

@@ -7,6 +7,7 @@ import type {
 } from "./deviceClient";
 import { withTimeout } from "./httpUtil";
 import { LineFramer } from "./lineFramer";
+import { PendingColors, type Rgb } from "./pendingColors";
 import { mergePresets, parsePresetsJson } from "./presets";
 import type { SerialTransport } from "./serial";
 import type { ConnectionStatus, WledInfo, WledPreset, WledState } from "../types";
@@ -43,7 +44,7 @@ export class SerialWledClient implements DeviceClient {
 	private reconnectTimer: number | null = null;
 	private reconnectDelay = RECONNECT_DELAY_MS;
 	private colorWriteTimer: number | null = null;
-	private pendingColorBody: Record<string, unknown> | null = null;
+	private pendingColors = new PendingColors();
 	private closedByUser = false;
 	private status: ConnectionStatus = "connecting";
 	private httpPresets: WledPreset[] = [];
@@ -250,13 +251,12 @@ export class SerialWledClient implements DeviceClient {
 	}
 
 	// Debounced like the network client: the ESP is slow, and so is a 115200 baud line.
-	setSegmentColorDebounced(segId: number, rgb: [number, number, number]): void {
-		this.pendingColorBody = { seg: [{ id: segId, col: [rgb] }] };
+	setSegmentColorDebounced(segId: number, rgb: Rgb): void {
+		this.pendingColors.set(segId, rgb);
 		if (this.colorWriteTimer !== null) window.clearTimeout(this.colorWriteTimer);
 		this.colorWriteTimer = window.setTimeout(() => {
 			this.colorWriteTimer = null;
-			const body = this.pendingColorBody;
-			this.pendingColorBody = null;
+			const body = this.pendingColors.take();
 			if (body) void this.setState(body).catch(() => undefined);
 		}, this.options.colorWriteDebounceMs);
 	}
