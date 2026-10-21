@@ -1,12 +1,13 @@
 import { requestUrl } from "obsidian";
 import { withTimeout } from "./httpUtil";
 import type {
-	ConnectionStatus,
-	WledInfo,
-	WledPreset,
-	WledState,
-	WledStateInfo,
-} from "../types";
+	DeviceClient,
+	DeviceClientEvent,
+	DeviceClientEventPayloads,
+	DeviceStatePush,
+	Listener,
+} from "./deviceClient";
+import type { ConnectionStatus, WledPreset, WledStateInfo } from "../types";
 
 // requestUrl() instead of fetch() to avoid CORS issues (not subject to the browser fetch sandbox).
 
@@ -15,24 +16,8 @@ const RECONNECT_DELAY_MS = 1500;
 const RECONNECT_MAX_DELAY_MS = 20000;
 const RECONNECT_BACKOFF_FACTOR = 1.3;
 
-export type WledClientEvent = "status" | "state" | "presets";
-
-type Listener<T> = (payload: T) => void;
-
-// WLED's /ws push on external state changes only includes "state", not "info".
-export interface WledStatePush {
-	state: WledState;
-	info?: WledInfo;
-}
-
-export interface WledClientEventPayloads {
-	status: { status: ConnectionStatus; error?: string };
-	state: WledStatePush;
-	presets: WledPreset[];
-}
-
 // HTTP + WebSocket client for a single WLED controller.
-export class WledClient {
+export class WledClient implements DeviceClient {
 	private ws: WebSocket | null = null;
 	private reconnectTimer: number | null = null;
 	private reconnectDelay = RECONNECT_DELAY_MS;
@@ -41,7 +26,7 @@ export class WledClient {
 	private closedByUser = false;
 	private status: ConnectionStatus = "connecting";
 
-	private listeners: { [K in WledClientEvent]: Set<Listener<WledClientEventPayloads[K]>> } = {
+	private listeners: { [K in DeviceClientEvent]: Set<Listener<DeviceClientEventPayloads[K]>> } = {
 		status: new Set(),
 		state: new Set(),
 		presets: new Set(),
@@ -52,15 +37,15 @@ export class WledClient {
 		private colorWriteDebounceMs: number
 	) {}
 
-	on<K extends WledClientEvent>(event: K, cb: Listener<WledClientEventPayloads[K]>): void {
+	on<K extends DeviceClientEvent>(event: K, cb: Listener<DeviceClientEventPayloads[K]>): void {
 		this.listeners[event].add(cb);
 	}
 
-	off<K extends WledClientEvent>(event: K, cb: Listener<WledClientEventPayloads[K]>): void {
+	off<K extends DeviceClientEvent>(event: K, cb: Listener<DeviceClientEventPayloads[K]>): void {
 		this.listeners[event].delete(cb);
 	}
 
-	private emit<K extends WledClientEvent>(event: K, payload: WledClientEventPayloads[K]): void {
+	private emit<K extends DeviceClientEvent>(event: K, payload: DeviceClientEventPayloads[K]): void {
 		for (const cb of this.listeners[event]) cb(payload);
 	}
 
@@ -145,7 +130,7 @@ export class WledClient {
 			try {
 				const data: unknown = JSON.parse(ev.data as string);
 				if (data && typeof data === "object" && "state" in data) {
-					this.emit("state", data as WledStatePush);
+					this.emit("state", data as DeviceStatePush);
 				}
 			} catch {
 				// ignore non-JSON messages

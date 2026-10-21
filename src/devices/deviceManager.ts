@@ -1,9 +1,10 @@
-import { WledClient, type WledStatePush } from "./wledClient";
+import type { DeviceClient, DeviceStatePush } from "./deviceClient";
+import { WledClient } from "./wledClient";
 import type { WledDeviceConfig, WledDeviceRuntimeState, WledPreset } from "../types";
 
 export interface DeviceEntry {
 	config: WledDeviceConfig;
-	client: WledClient;
+	client: DeviceClient;
 	runtime: WledDeviceRuntimeState;
 }
 
@@ -67,7 +68,7 @@ export class DeviceManager {
 			runtime.lastError = error;
 			this.notify(config.id);
 		});
-		client.on("state", (data: WledStatePush) => {
+		client.on("state", (data: DeviceStatePush) => {
 			runtime.state = data.state;
 			if (data.info) runtime.info = data.info;
 			this.notify(config.id);
