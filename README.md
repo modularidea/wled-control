@@ -18,6 +18,11 @@ Obsidian — color, brightness, presets, and on/off, with automatic device disco
 - Ribbon icon and status bar entry per device for one-click toggling, with live color feedback
 - Commands (with hotkey support) to toggle a specific device
 - Open a device's own web dashboard in a browser tab, or embedded as an in-app tab
+- **USB serial control (experimental, macOS/Linux, opt-in):** control a WLED controller that
+  is plugged in via USB, with no WiFi needed. Color, brightness, presets, segments and
+  on/off work the same as for network devices
+- `scripts/wled-serial.sh` to switch a USB controller from the macOS Shortcuts app or the
+  terminal (`toggle`, `on`, `off`, `bri=N`, `preset=N`, or raw JSON), even without Obsidian
 - Codeblock buttons allowing for custom states and sequences.
 
 ## Installation
@@ -33,6 +38,23 @@ Not yet on the Obsidian Community Plugins list. Manual install for now:
 
 1. Open Settings → WLED Control and add a device (manual IP, or click "Start search").
 2. Open the WLED Control sidebar (ribbon icon or the "Open sidebar" command) to control it.
+
+### USB serial devices
+
+1. Enable **USB serial devices** in Settings → WLED Control (off by default).
+2. In the add-device panel pick the serial port (`/dev/cu.usbmodem…`) and add it. USB
+   devices show a small "USB" badge on their card.
+3. WLED cannot list its presets over serial: enter preset names manually, import them from
+   a `presets.json`, or fetch them over HTTP if the controller is also on the network.
+
+Notes: the serial port is opened by helper processes (`stty`/`cat`), so no native module is
+needed. Only one program should hold the port at a time for reading; the shell script only
+writes and can run alongside the plugin. WLED cannot switch WiFi over serial.
+
+```bash
+scripts/wled-serial.sh toggle
+scripts/wled-serial.sh -p /dev/cu.usbmodem1101 bri=128
+```
 
 ### Codeblock buttons
 
@@ -51,7 +73,7 @@ Not yet on the Obsidian Community Plugins list. Manual install for now:
   around this with an active HTTP subnet scan (enabled by default), which does not require
   that entitlement — but it only finds devices on the same subnet as your computer.
 - Desktop only (`isDesktopOnly: true`) — requires Node APIs not available on mobile.
-- No USB/serial control yet.
+- USB serial is experimental, macOS/Linux only, and needs Obsidian to be allowed to run helper processes.
 - No effects/palette editing yet — color, brightness, presets, segments, and on/off only.
 
 ## Development
