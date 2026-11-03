@@ -22,6 +22,19 @@ interface StatusBarEntry {
 	label: HTMLElement;
 }
 
+interface EffectStep {
+	status: Record<string, unknown>;
+	delay?: number;
+}
+
+interface EffectBlock {
+	"device-name"?: string;
+	"device-id"?: string;
+	"effect-name"?: string;
+	status?: Record<string, unknown>;
+	sequence?: EffectStep[];
+}
+
 export default class WledControlPlugin extends Plugin {
 	settings!: WledControlSettings;
 	deviceManager!: DeviceManager;
@@ -60,6 +73,74 @@ export default class WledControlPlugin extends Plugin {
 		this.addSettingTab(new WledSettingTab(this.app, this));
 
 		this.refreshQuickAccess();
+		this.registerMarkdownCodeBlockProcessor("wled-effect", (source, el) =>
+			this.renderEffectButton(source, el)
+		);
+	}
+
+	private renderEffectButton(source: string, el: HTMLElement): void {
+		let content: EffectBlock;
+		try {
+			content = JSON.parse(source) as EffectBlock;
+		} catch (e) {
+			console.error("WLED Effect Button: invalid JSON in code block", e);
+			el.createEl("p", {
+				cls: "wled-effect-error",
+				text: `Invalid JSON in wled-effect block: ${String(e)}`,
+			});
+			return;
+		}
+
+		const deviceName = content["device-name"];
+		const effectName = content["effect-name"] ?? "WLED effect";
+		const label = deviceName ? `${deviceName} : ${effectName}` : effectName;
+		const button = el.createEl("button", { cls: "wled-effect-button", text: label });
+
+		let running = false;
+		button.addEventListener("click", () => {
+			if (running) return;
+			running = true;
+			void this.runEffect(content, button).finally(() => {
+				running = false;
+			});
+		});
+	}
+
+	private async runEffect(content: EffectBlock, button: HTMLElement): Promise<void> {
+		const deviceId = content["device-id"];
+		const deviceName = content["device-name"];
+		const device = this.deviceManager
+			.getEntries()
+			.find((entry) =>
+				deviceId !== undefined
+					? entry.config.id === deviceId
+					: entry.config.name === deviceName
+			);
+		if (!device || device.client.getStatus() !== "online") {
+			this.flashEffectError(button);
+			return;
+		}
+
+		button.setAttr("working", true);
+		try {
+			for (const step of content.sequence ?? []) {
+				await device.client.setState(step.status);
+				await new Promise<void>((resolve) =>
+					window.setTimeout(resolve, Math.max(0, Number(step.delay) || 0))
+				);
+			}
+			if (content.status) await device.client.setState(content.status);
+		} catch (e) {
+			console.error("WLED Effect Button: failed to send state", e);
+			this.flashEffectError(button);
+		} finally {
+			button.removeAttribute("working");
+		}
+	}
+
+	private flashEffectError(button: HTMLElement): void {
+		button.setAttr("error", true);
+		window.setTimeout(() => button.removeAttribute("error"), 3000);
 	}
 
 	onunload(): void {
